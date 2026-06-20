@@ -70,10 +70,11 @@ network = psutil.net_io_counters()
 sent = network.bytes_sent / (1024 * 1024)
 
 battery = psutil.sensors_battery()
-battery_text = (
-    f"{battery.percent}%"
-    if battery else "Not Available"
-)
+
+if battery:
+    battery_text = f"{battery.percent}%"
+else:
+    battery_text = "--"
 
 boot_time = psutil.boot_time()
 uptime_seconds = time.time() - boot_time
