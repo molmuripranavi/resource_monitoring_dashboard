@@ -71,10 +71,10 @@ sent = network.bytes_sent / (1024 * 1024)
 
 battery = psutil.sensors_battery()
 
-if battery:
+if battery is not None:
     battery_text = f"{battery.percent}%"
 else:
-    battery_text = "--"
+    battery_text = "Cloud Server"
 
 boot_time = psutil.boot_time()
 uptime_seconds = time.time() - boot_time
