@@ -1,201 +1,249 @@
-import tkinter as tk
-from tkinter import ttk
+import streamlit as st
 import psutil
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import pandas as pd
+import plotly.graph_objects as go
 import time
+from streamlit_autorefresh import st_autorefresh
 
-# Window
-root = tk.Tk()
-root.title("OS Resource Monitoring Dashboard")
-root.geometry("1000x700")
-root.configure(bg="black")
+# ---------------- PAGE CONFIG ----------------
 
-# Title
-title = tk.Label(
-    root,
-    text="OS Resource Monitoring Dashboard",
-    font=("Arial", 20, "bold"),
-    fg="white",
-    bg="black"
+st.set_page_config(
+    page_title="OS Resource Monitoring Dashboard",
+    page_icon="🖥️",
+    layout="wide"
 )
-title.pack(pady=10)
 
-# System Info Frame
-info_frame = tk.Frame(root, bg="black")
-info_frame.pack(pady=5)
+st_autorefresh(interval=2000, key="refresh")
 
-cpu_label = tk.Label(info_frame, font=("Arial", 13), fg="green", bg="black")
-cpu_label.pack()
+# ---------------- CSS ----------------
 
-mem_label = tk.Label(info_frame, font=("Arial", 13), fg="yellow", bg="black")
-mem_label.pack()
+st.markdown("""
+<style>
 
-disk_label = tk.Label(info_frame, font=("Arial", 13), fg="cyan", bg="black")
-disk_label.pack()
+.stApp{
+    background-color:#f5f7fa;
+}
 
-net_label = tk.Label(info_frame, font=("Arial", 13), fg="white", bg="black")
-net_label.pack()
+.metric-card{
+    background:white;
+    padding:20px;
+    border-radius:15px;
+    box-shadow:0px 4px 15px rgba(0,0,0,0.08);
+    text-align:center;
+}
 
-uptime_label = tk.Label(info_frame, font=("Arial", 13), fg="lightblue", bg="black")
-uptime_label.pack()
+.metric-title{
+    color:#6b7280;
+    font-size:14px;
+}
 
-battery_label = tk.Label(info_frame, font=("Arial", 13), fg="orange", bg="black")
-battery_label.pack()
+.metric-value{
+    color:#111827;
+    font-size:28px;
+    font-weight:bold;
+}
 
-# Process Box
-process_title = tk.Label(
-    root,
-    text="Top Running Processes (CPU %)",
-    font=("Arial", 14, "bold"),
-    fg="orange",
-    bg="black"
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------- TITLE ----------------
+
+st.title("🖥️ OS Resource Monitoring Dashboard")
+st.caption("Real-Time System Monitoring")
+
+# ---------------- SESSION STATE ----------------
+
+for key in ["cpu_hist", "ram_hist", "disk_hist", "net_hist"]:
+    if key not in st.session_state:
+        st.session_state[key] = []
+
+# ---------------- SYSTEM DATA ----------------
+
+cpu = psutil.cpu_percent()
+
+memory = psutil.virtual_memory()
+ram = memory.percent
+
+disk = psutil.disk_usage("/").percent
+
+network = psutil.net_io_counters()
+sent = network.bytes_sent / (1024 * 1024)
+
+battery = psutil.sensors_battery()
+battery_text = (
+    f"{battery.percent}%"
+    if battery else "Not Available"
 )
-process_title.pack()
 
-process_box = tk.Text(
-    root,
-    height=8,
-    width=80,
-    bg="black",
-    fg="orange",
-    font=("Courier", 10)
+boot_time = psutil.boot_time()
+uptime_seconds = time.time() - boot_time
+
+hours = int(uptime_seconds // 3600)
+minutes = int((uptime_seconds % 3600) // 60)
+
+# ---------------- KPI CARDS ----------------
+
+c1, c2, c3, c4, c5, c6 = st.columns(6)
+
+cards = [
+    ("CPU", f"{cpu}%"),
+    ("RAM", f"{ram}%"),
+    ("DISK", f"{disk}%"),
+    ("NETWORK", f"{sent:.2f} MB"),
+    ("BATTERY", battery_text),
+    ("UPTIME", f"{hours}h {minutes}m")
+]
+
+for col, (title, value) in zip(
+        [c1, c2, c3, c4, c5, c6],
+        cards):
+
+    with col:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-title">{title}</div>
+            <div class="metric-value">{value}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+st.markdown("---")
+
+# ---------------- STORE HISTORY ----------------
+
+st.session_state.cpu_hist.append(cpu)
+st.session_state.ram_hist.append(ram)
+st.session_state.disk_hist.append(disk)
+st.session_state.net_hist.append(sent)
+
+if len(st.session_state.cpu_hist) > 20:
+    st.session_state.cpu_hist.pop(0)
+    st.session_state.ram_hist.pop(0)
+    st.session_state.disk_hist.pop(0)
+    st.session_state.net_hist.pop(0)
+
+# ---------------- CHARTS ----------------
+
+st.subheader("📈 Resource Trends")
+
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["CPU", "RAM", "Disk", "Network"]
 )
-process_box.pack(pady=10)
 
-# Tabs
-notebook = ttk.Notebook(root)
-notebook.pack(fill="both", expand=True)
+with tab1:
 
-cpu_tab = tk.Frame(notebook)
-ram_tab = tk.Frame(notebook)
-disk_tab = tk.Frame(notebook)
-network_tab = tk.Frame(notebook)
+    fig = go.Figure()
 
-notebook.add(cpu_tab, text="CPU Graph")
-notebook.add(ram_tab, text="RAM Graph")
-notebook.add(disk_tab, text="Disk Graph")
-notebook.add(network_tab, text="Network Graph")
+    fig.add_trace(go.Scatter(
+        y=st.session_state.cpu_hist,
+        mode="lines+markers",
+        name="CPU"
+    ))
 
-# Graphs
-fig_cpu, ax_cpu = plt.subplots(figsize=(6,3))
-canvas_cpu = FigureCanvasTkAgg(fig_cpu, cpu_tab)
-canvas_cpu.get_tk_widget().pack()
+    fig.update_layout(
+        template="plotly_white",
+        height=350
+    )
 
-fig_ram, ax_ram = plt.subplots(figsize=(6,3))
-canvas_ram = FigureCanvasTkAgg(fig_ram, ram_tab)
-canvas_ram.get_tk_widget().pack()
+    st.plotly_chart(fig, use_container_width=True)
 
-fig_disk, ax_disk = plt.subplots(figsize=(6,3))
-canvas_disk = FigureCanvasTkAgg(fig_disk, disk_tab)
-canvas_disk.get_tk_widget().pack()
+with tab2:
 
-fig_net, ax_net = plt.subplots(figsize=(6,3))
-canvas_net = FigureCanvasTkAgg(fig_net, network_tab)
-canvas_net.get_tk_widget().pack()
+    fig = go.Figure()
 
-cpu_data = []
-ram_data = []
-disk_data = []
-net_data = []
+    fig.add_trace(go.Scatter(
+        y=st.session_state.ram_hist,
+        mode="lines+markers",
+        name="RAM"
+    ))
 
-running = True
+    fig.update_layout(
+        template="plotly_white",
+        height=350
+    )
 
-def update_dashboard():
-    global running
+    st.plotly_chart(fig, use_container_width=True)
 
-    cpu = psutil.cpu_percent()
-    memory = psutil.virtual_memory().percent
-    disk = psutil.disk_usage('/').percent
-    net = psutil.net_io_counters()
+with tab3:
 
-    sent = net.bytes_sent // (1024 * 1024)
+    fig = go.Figure()
 
-    # Uptime (Hours + Minutes)
-    boot_time = psutil.boot_time()
-    uptime_seconds = time.time() - boot_time
-    hours = int(uptime_seconds // 3600)
-    minutes = int((uptime_seconds % 3600) // 60)
+    fig.add_trace(go.Scatter(
+        y=st.session_state.disk_hist,
+        mode="lines+markers",
+        name="Disk"
+    ))
 
-    # Battery
-    battery = psutil.sensors_battery()
-    if battery:
-        battery_text = f"Battery: {battery.percent}%"
-    else:
-        battery_text = "Battery: Not Available"
+    fig.update_layout(
+        template="plotly_white",
+        height=350
+    )
 
-    cpu_label.config(text=f"CPU Usage: {cpu}%")
-    mem_label.config(text=f"Memory Usage: {memory}%")
-    disk_label.config(text=f"Disk Usage: {disk}%")
-    net_label.config(text=f"Network Sent: {sent} MB")
-    uptime_label.config(text=f"System Uptime: {hours}h {minutes}m")
-    battery_label.config(text=battery_text)
+    st.plotly_chart(fig, use_container_width=True)
 
-    # Top Processes
-    process_box.delete("1.0", tk.END)
+with tab4:
 
-    processes = []
-    for proc in psutil.process_iter(['name', 'cpu_percent']):
-        try:
-            processes.append((proc.info['name'], proc.info['cpu_percent']))
-        except:
-            pass
+    fig = go.Figure()
 
-    processes = sorted(processes, key=lambda x: x[1], reverse=True)
+    fig.add_trace(go.Scatter(
+        y=st.session_state.net_hist,
+        mode="lines+markers",
+        name="Network"
+    ))
 
-    process_box.insert(tk.END, "Process Name               CPU%\n")
-    process_box.insert(tk.END, "-------------------------------------\n")
+    fig.update_layout(
+        template="plotly_white",
+        height=350
+    )
 
-    for proc in processes[:10]:
-        name = proc[0] if proc[0] else "Unknown"
-        cpu_percent = proc[1]
-        process_box.insert(tk.END, f"{name:<25} {cpu_percent:>5}%\n")
+    st.plotly_chart(fig, use_container_width=True)
 
-    # Store Data
-    cpu_data.append(cpu)
-    ram_data.append(memory)
-    disk_data.append(disk)
-    net_data.append(sent)
+# ---------------- TOP PROCESSES ----------------
 
-    if len(cpu_data) > 20:
-        cpu_data.pop(0)
-        ram_data.pop(0)
-        disk_data.pop(0)
-        net_data.pop(0)
+st.subheader("⚙️ Top Running Processes")
 
-    # CPU Graph
-    ax_cpu.clear()
-    ax_cpu.plot(cpu_data)
-    ax_cpu.set_title("CPU Usage")
-    canvas_cpu.draw()
+processes = []
 
-    # RAM Graph
-    ax_ram.clear()
-    ax_ram.plot(ram_data)
-    ax_ram.set_title("RAM Usage")
-    canvas_ram.draw()
+for proc in psutil.process_iter(
+        ['pid', 'name', 'cpu_percent']):
+    try:
+        processes.append([
+            proc.info['name'],
+            proc.info['pid'],
+            proc.info['cpu_percent']
+        ])
+    except:
+        pass
 
-    # Disk Graph
-    ax_disk.clear()
-    ax_disk.plot(disk_data)
-    ax_disk.set_title("Disk Usage")
-    canvas_disk.draw()
+process_df = pd.DataFrame(
+    processes,
+    columns=[
+        "Process Name",
+        "PID",
+        "CPU %"
+    ]
+)
 
-    # Network Graph
-    ax_net.clear()
-    ax_net.plot(net_data)
-    ax_net.set_title("Network Sent")
-    canvas_net.draw()
+process_df = process_df.sort_values(
+    by="CPU %",
+    ascending=False
+).head(10)
 
-    if running:
-        root.after(1000, update_dashboard)
+st.dataframe(
+    process_df,
+    use_container_width=True
+)
 
-def on_closing():
-    global running
-    running = False
-    root.destroy()
+# ---------------- DOWNLOAD REPORT ----------------
 
-root.protocol("WM_DELETE_WINDOW", on_closing)
+report_df = pd.DataFrame({
+    "CPU":[cpu],
+    "RAM":[ram],
+    "DISK":[disk],
+    "NETWORK_MB":[round(sent,2)]
+})
 
-update_dashboard()
-root.mainloop()
+st.download_button(
+    "📥 Download Report",
+    report_df.to_csv(index=False),
+    file_name="system_report.csv"
+)
