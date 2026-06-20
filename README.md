@@ -77,23 +77,13 @@ cd OS-Resource-Monitoring-Dashboard
 pip install psutil matplotlib
 ```
 
-Or using requirements.txt:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
 ## Running the Application
 
 Execute the following command:
 
 ```bash
-python main.py
+python -m streamlit run main.py
 ```
-
----
 
 ## Dashboard Components
 
@@ -130,16 +120,6 @@ The dashboard continuously updates:
 * Process Management (Kill Process Feature)
 * Network Receive Statistics
 * System Health Score
-
----
-
-## Screenshot
-
-Add a screenshot of your dashboard here.
-
-```
-screenshots/dashboard.png
-```
 
 ---
 
